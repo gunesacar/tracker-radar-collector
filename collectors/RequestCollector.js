@@ -212,7 +212,7 @@ class RequestCollector extends BaseCollector {
         const request = this.findLastRequestWithId(id);
 
         if (!request) {
-            this._log('⚠️ unmatched extra info', id);
+            this._log('⚠️ unmatched extra info', id, headers);
             return;
         }
 

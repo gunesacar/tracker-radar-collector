@@ -43,6 +43,7 @@ class CookieCollector extends BaseCollector {
         return result.cookies
             .map(cookie => ({
                 name: cookie.name,
+                value: cookie.value,
                 domain: cookie.domain,
                 path: cookie.path,
                 expires: this.normalizeDate(cookie.expires),
@@ -57,6 +58,7 @@ module.exports = CookieCollector;
 /**
  * @typedef CookieData
  * @property {string} name
+ * @property {string} value
  * @property {string} domain
  * @property {string} path
  * @property {number=} expires

@@ -178,6 +178,21 @@ if (program.url) {
     urls = fs.readFileSync(program.inputList).toString().split('\n').map(u => u.trim());
 }
 
+const SCREENSHOTS_DIR = "screenshots";
+const SOURCES_DIR = "html";
+const SRI_DIR = "sri";
+
+if (! fs.existsSync(SCREENSHOTS_DIR)) {
+    fs.mkdirSync(SCREENSHOTS_DIR);
+}
+
+if (! fs.existsSync(SOURCES_DIR)) {
+    fs.mkdirSync(SOURCES_DIR);
+}
+if (! fs.existsSync(SRI_DIR)) {
+    fs.mkdirSync(SRI_DIR);
+}
+
 if (!urls || !program.output) {
     program.help();
     process.exit(1);

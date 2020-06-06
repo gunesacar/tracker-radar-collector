@@ -120,7 +120,7 @@ const breakpoints = [
             {name: 'connection'}, // changes over time
             {name: 'onLine'},
             {name: 'keyboard'},
-            {name: 'permissions'},
+            // {name: 'permissions'}, // gunes: this is overwritten by pptr stealth plugin and cause too many script null warnings
             {name: 'presentation'}, //TODO nees double checking
             {name: 'product'},
             {name: 'productSub'},

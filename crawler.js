@@ -1,14 +1,31 @@
-const puppeteer = require('puppeteer');
+const fs = require('fs');
+const USE_EVASION = true;
+// const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-extra');
+// tested on https://intoli.com/blog/not-possible-to-block-chrome-headless/chrome-headless-test.html
+
+if (USE_EVASION){
+    // add stealth plugin and use defaults (all evasion techniques)
+    const StealthPlugin = require('puppeteer-extra-plugin-stealth')
+    puppeteer.use(StealthPlugin())
+}else{
+    //const puppeteer = require('puppeteer');
+}
+
 const chalk = require('chalk').default;
 const {createTimer} = require('./helpers/timer');
 const wait = require('./helpers/wait');
 const tldts = require('tldts');
 
 const MAX_LOAD_TIME = 30000;//ms
-const MAX_TOTAL_TIME = MAX_LOAD_TIME * 2;//ms
-const EXECUTION_WAIT_TIME = 2500;//ms
+// const MAX_TOTAL_TIME = MAX_LOAD_TIME * 2;//ms
+const MAX_TOTAL_TIME = MAX_LOAD_TIME * 3;//ms
+const EXECUTION_WAIT_TIME = 10000;//ms
 
-const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36';
+// const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36';
+// updated for CNAME measurement
+const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36'
+
 const MOBILE_USER_AGENT = 'Mozilla/5.0 (Linux; Android 10; Pixel 2 XL) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.117 Mobile Safari/537.36';
 
 const DEFAULT_VIEWPORT = {
@@ -27,6 +44,7 @@ const MOBILE_VIEWPORT = {
 const VISUAL_DEBUG = false;
 
 async function openBrowser() {
+
     const browser = await puppeteer.launch(VISUAL_DEBUG ? {
         headless: false,
         devtools: true,
@@ -38,7 +56,7 @@ async function openBrowser() {
 }
 
 /**
- * @param {puppeteer.Browser} browser 
+ * @param {puppeteer.Browser} browser
  */
 async function closeBrowser(browser) {
     if (!VISUAL_DEBUG) {
@@ -46,11 +64,40 @@ async function closeBrowser(browser) {
     }
 }
 
+
 /**
- * @param {puppeteer.Browser} browser 
- * @param {URL} url 
+ * @param {puppeteer.Page} page
+ *
+ * @returns {Promise<Array>}
+ */
+async function collectSriValues(page) {
+    let script_sris = await page.evaluate(() => {
+        let links = document.getElementsByTagName('script');
+        // return Array.from(links);
+        return Array.from(links).filter(script=>script.src).map(x => [x.src, x.integrity]);
+    });
+    return script_sris;
+}
+
+/**
+ * @param {Array<Object>} targets
+ */
+
+async function stopLoadingTargets(targets){
+    for (let target of targets) {
+        if (target.type === 'page') {
+            // eslint-disable-next-line no-await-in-loop
+            await target.cdpClient.send('Page.stopLoading');
+        }
+    }
+}
+
+
+/**
+ * @param {puppeteer.Browser} browser
+ * @param {URL} url
  * @param {{collectors: import('./collectors/BaseCollector')[], log: function(...any):void, rank?: number, urlFilter: function(string, string):boolean, emulateMobile: boolean}} data
- * 
+ *
  * @returns {Promise<CollectResult>}
  */
 async function getSiteData(browser, url, {
@@ -141,13 +188,15 @@ async function getSiteData(browser, url, {
     } catch (e) {
         if (e && e.message && e.message.startsWith('Navigation Timeout Exceeded')) {
             log(chalk.yellow('Navigation timeout exceeded.'));
-
+            await stopLoadingTargets(targets);
+            /*
             for (let target of targets) {
                 if (target.type === 'page') {
                     // eslint-disable-next-line no-await-in-loop
                     await target.cdpClient.send('Page.stopLoading');
                 }
             }
+            */
             timeout = true;
         } else {
             throw e;
@@ -158,6 +207,56 @@ async function getSiteData(browser, url, {
     await page.waitFor(EXECUTION_WAIT_TIME);
 
     const finalUrl = page.url();
+    const RELOAD_PAGE_FOR_CNAME_MEASUREMENT = true;
+
+    if (RELOAD_PAGE_FOR_CNAME_MEASUREMENT){
+
+        try {
+            await page.reload({timeout: MAX_LOAD_TIME, waitUntil: ["networkidle0", "domcontentloaded"] });
+            // await page.reload({timeout: 0.01, waitUntil: ["networkidle0", "domcontentloaded"] });
+        } catch (e) {
+            if (e && e.message && e.message.startsWith('Navigation Timeout Exceeded')) {
+                log(chalk.yellow('Navigation timeout exceeded during reload.'));
+                await stopLoadingTargets(targets);
+                timeout = true;
+            } else {
+                throw e;
+            }
+        }
+
+        await page.waitFor(EXECUTION_WAIT_TIME);
+    }
+    await page.screenshot({path: 'screenshots/' + url.hostname + '.png'})
+
+    let sri_values = [];
+    // get JS SRI values on the top level document
+    sri_values.push([url, await collectSriValues(page)])
+
+    /**
+     * @param {puppeteer.Page|puppeteer.Frame} pageOrFrame
+     */
+    async function extractFrameContents(pageOrFrame) {
+        const frames = await pageOrFrame.$$('iframe');
+        for (let frameElement of frames) {
+
+            const frame = await frameElement.contentFrame();
+            let script_details = await collectSriValues(frame);
+
+            if (script_details.length){
+                sri_values.push([frame.url(), script_details])
+            }
+            // recursively repeat
+            await extractFrameContents(frame);
+        }
+    }
+
+    await extractFrameContents(page);
+
+    fs.writeFileSync(`sri/${url.hostname}.json`, JSON.stringify(sri_values, null, 2));
+
+    let bodyHTML = await page.content();
+    fs.writeFileSync(`html/${url.hostname}.html`, bodyHTML);
+
     /**
      * @type {Object<string, Object>}
      */
@@ -181,7 +280,11 @@ async function getSiteData(browser, url, {
 
     for (let target of targets) {
         // eslint-disable-next-line no-await-in-loop
-        await target.cdpClient.detach();
+        try {
+            await target.cdpClient.detach();
+        } catch (e) {
+            log(chalk.yellow(`detaching from ${target.url} failed`), chalk.gray(e.message));
+        }
     }
 
     if (!VISUAL_DEBUG) {
@@ -201,8 +304,8 @@ async function getSiteData(browser, url, {
 }
 
 /**
- * @param {string} documentUrl 
- * @param {string} requestUrl 
+ * @param {string} documentUrl
+ * @param {string} requestUrl
  * @returns {boolean}
  */
 function isThirdPartyRequest(documentUrl, requestUrl) {
@@ -219,7 +322,7 @@ function isThirdPartyRequest(documentUrl, requestUrl) {
 module.exports = async (url, options) => {
     const browser = await openBrowser();
     let data = null;
-    
+
     try {
         data = await wait(getSiteData(browser, url, {
             collectors: options.collectors || [],

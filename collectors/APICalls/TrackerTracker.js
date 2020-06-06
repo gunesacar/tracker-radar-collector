@@ -212,7 +212,7 @@ class TrackerTracker {
             const urlObj = new URL(script, this._mainURL);
             script = urlObj.href;
         } catch(e) {
-            this._log('⚠️ invalid source, assuming global', script);
+            this._log('⚠️ invalid source, assuming global', script, payload.description, payload.stack);
             script = this._mainURL;
         }
 
