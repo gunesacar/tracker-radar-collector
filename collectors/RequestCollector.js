@@ -111,6 +111,7 @@ class RequestCollector extends BaseCollector {
         let initiator = data.initiator;
         const url = request.url;
         const method = request.method;
+        let postData;
 
         // for CORS requests initiator is set incorrectly to 'parser', thankfully we can get proper initiator
         // from the corresponding OPTIONS request
@@ -123,12 +124,14 @@ class RequestCollector extends BaseCollector {
                     break;
                 }
             }
+        } else if (method === "POST") {
+            postData = request.postData;
         }
 
         /**
          * @type {InternalRequestData}
          */
-        const requestData = {id, url, method, type, initiator, startTime};
+        const requestData = {id, url, method, type, initiator, startTime, postData};
 
         // if request A gets redirected to B which gets redirected to C chrome will produce 4 events:
         // requestWillBeSent(A) requestWillBeSent(B) requestWillBeSent(C) responseReceived()
@@ -304,7 +307,8 @@ class RequestCollector extends BaseCollector {
                 redirectedTo: request.redirectedTo,
                 redirectedFrom: request.redirectedFrom,
                 initiators: Array.from(getAllInitiators(request.initiator)),
-                time: (request.startTime && request.endTime) ? (request.endTime - request.startTime) : undefined
+                time: (request.startTime && request.endTime) ? (request.endTime - request.startTime) : undefined,
+                postData: request.postData
             }));
     }
 }
@@ -345,6 +349,7 @@ module.exports = RequestCollector;
  * @property {Timestamp=} startTime
  * @property {Timestamp=} endTime
  * @property {string=} responseBodyHash
+ * @property {string=} postData
  */
 
 /**
@@ -369,6 +374,7 @@ module.exports = RequestCollector;
  * @property {import('puppeteer').HttpMethod} method
  * @property {object} headers
  * @property {ResourcePriority} initialPriority
+ * @property {string} postData
  */
 
 /**
