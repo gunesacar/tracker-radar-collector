@@ -3,7 +3,6 @@ const USE_EVASION = true;
 // const puppeteer = require('puppeteer');
 const puppeteer = require('puppeteer-extra');
 // tested on https://intoli.com/blog/not-possible-to-block-chrome-headless/chrome-headless-test.html
-const PuppeteerHar = require('puppeteer-har');
 
 if (USE_EVASION){
     // add stealth plugin and use defaults (all evasion techniques)
@@ -169,9 +168,7 @@ async function getSiteData(browser, url, {
 
     // Create a new page in a pristine context.
     const page = await context.newPage();
-    const har = new PuppeteerHar(page);
 
-    await har.start({ path: `har/${url.hostname}.har` });
 
     await page.emulate({
         // just in case some sites block headless visits
@@ -242,8 +239,8 @@ async function getSiteData(browser, url, {
     async function extractFrameContents(pageOrFrame) {
         const frames = await pageOrFrame.$$('iframe');
         for (let frameElement of frames) {
-
             const frame = await frameElement.contentFrame();
+            log("Will search the frame for links", frame.url())
             let script_details = await collectSriValues(frame);
 
             if (script_details.length){
@@ -282,7 +279,6 @@ async function getSiteData(browser, url, {
         }
     }
 
-    await har.stop();
     for (let target of targets) {
         // eslint-disable-next-line no-await-in-loop
         try {

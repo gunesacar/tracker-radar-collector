@@ -181,7 +181,6 @@ if (program.url) {
 const SCREENSHOTS_DIR = "screenshots";
 const SOURCES_DIR = "html";
 const SRI_DIR = "sri";
-const HARS_DIR = "har";
 
 if (! fs.existsSync(SCREENSHOTS_DIR)) {
     fs.mkdirSync(SCREENSHOTS_DIR);
@@ -195,9 +194,6 @@ if (! fs.existsSync(SRI_DIR)) {
     fs.mkdirSync(SRI_DIR);
 }
 
-if (! fs.existsSync(HARS_DIR)) {
-    fs.mkdirSync(HARS_DIR);
-}
 
 if (!urls || !program.output) {
     program.help();
