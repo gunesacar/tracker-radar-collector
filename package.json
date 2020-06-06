@@ -40,6 +40,7 @@
     "puppeteer": "^1.20.0",
     "puppeteer-extra": "^3.1.9",
     "puppeteer-extra-plugin-stealth": "^2.4.9",
+    "puppeteer-har": "^1.1.2",
     "tldts": "^4.0.3"
   }
 }

@@ -29,7 +29,7 @@ class RequestCollector extends BaseCollector {
     }
 
     /**
-     * @param {import('./BaseCollector').CollectorInitOptions} options 
+     * @param {import('./BaseCollector').CollectorInitOptions} options
      */
     init({
         log,
@@ -39,10 +39,11 @@ class RequestCollector extends BaseCollector {
          */
         this._requests = [];
         this._log = log;
+        this._unmatched_extra_info = new Map();
     }
 
     /**
-     * @param {{cdpClient: import('puppeteer').CDPSession, url: string, type: import('puppeteer').TargetType}} targetInfo 
+     * @param {{cdpClient: import('puppeteer').CDPSession, url: string, type: import('puppeteer').TargetType}} targetInfo
      */
     async addTarget({cdpClient}) {
         await cdpClient.send('Runtime.enable');
@@ -61,7 +62,7 @@ class RequestCollector extends BaseCollector {
     }
 
     /**
-     * @param {RequestId} id 
+     * @param {RequestId} id
      */
     findLastRequestWithId(id) {
         let i = this._requests.length;
@@ -76,7 +77,7 @@ class RequestCollector extends BaseCollector {
     }
 
     /**
-     * @param {RequestId} id 
+     * @param {RequestId} id
      * @param {import('puppeteer').CDPSession} cdp
      */
     async getResponseBodyHash(id, cdp) {
@@ -95,7 +96,7 @@ class RequestCollector extends BaseCollector {
     }
 
     /**
-     * @param {{initiator: object, request: CDPRequest, requestId: RequestId, timestamp: Timestamp, frameId?: FrameId, type?: ResourceType, redirectResponse?: CDPResponse}} data 
+     * @param {{initiator: object, request: CDPRequest, requestId: RequestId, timestamp: Timestamp, frameId?: FrameId, type?: ResourceType, redirectResponse?: CDPResponse}} data
      * @param {import('puppeteer').CDPSession} cdp
      */
     handleRequest(data, cdp) {
@@ -162,7 +163,7 @@ class RequestCollector extends BaseCollector {
     }
 
     /**
-     * @param {{requestId: RequestId, url: string, initiator: object}} request 
+     * @param {{requestId: RequestId, url: string, initiator: object}} request
      */
     handleWebSocket(request) {
         this._requests.push({
@@ -174,7 +175,7 @@ class RequestCollector extends BaseCollector {
     }
 
     /**
-     * @param {{requestId: RequestId, type: ResourceType, frameId?: FrameId, response: CDPResponse}} data 
+     * @param {{requestId: RequestId, type: ResourceType, frameId?: FrameId, response: CDPResponse}} data
      */
     handleResponse(data) {
         const {
@@ -183,7 +184,7 @@ class RequestCollector extends BaseCollector {
             response
         } = data;
         const request = this.findLastRequestWithId(id);
-
+        // this._log('RECEIVED response', id, response.url);
         if (!request) {
             this._log('⚠️ unmatched response', id, response.url);
             return;
@@ -192,17 +193,25 @@ class RequestCollector extends BaseCollector {
         request.type = type || request.type;
         request.status = response.status;
         request.remoteIPAddress = response.remoteIPAddress;
-
         // prioritize raw headers received via handleResponseExtraInfo as response.headers available here
         // might be filtered (e.g. missing set-cookie header)
         if (!request.responseHeaders) {
-            request.responseHeaders = normalizeHeaders(response.headers);
+            // check if we received an handleResponseExtraInfo for this request
+            let headers = this._unmatched_extra_info.get(id);
+            /*
+            if (headers){
+                this._log(Object.keys(headers).length, Object.keys(response.headers).length)
+                // this._log(response.url, "extrainfo_headers", typeof(headers), headers)
+                // this._log(response.url, "response.headers", typeof(response.headers), response.headers)
+            }
+            */
+            request.responseHeaders = normalizeHeaders(headers ? headers: response.headers);
         }
     }
 
     /**
      * Network.responseReceivedExtraInfo
-     * @param {{requestId: RequestId, headers: object}} data 
+     * @param {{requestId: RequestId, headers: object}} data
      */
     handleResponseExtraInfo(data) {
         const {
@@ -210,9 +219,10 @@ class RequestCollector extends BaseCollector {
             headers
         } = data;
         const request = this.findLastRequestWithId(id);
-
         if (!request) {
-            this._log('⚠️ unmatched extra info', id, headers);
+            // this._log('⚠️ unmatched extra info', id, headers);
+            this._log('⚠️ unmatched extra info', id);
+            this._unmatched_extra_info.set(id, headers)
             return;
         }
 
@@ -220,7 +230,7 @@ class RequestCollector extends BaseCollector {
     }
 
     /**
-     * @param {{errorText: string, requestId: RequestId, timestamp: Timestamp, type: ResourceType}} data 
+     * @param {{errorText: string, requestId: RequestId, timestamp: Timestamp, type: ResourceType}} data
      * @param {import('puppeteer').CDPSession} cdp
      */
     async handleFailedRequest(data, cdp) {
@@ -240,7 +250,7 @@ class RequestCollector extends BaseCollector {
     }
 
     /**
-     * @param {{requestId: RequestId, encodedDataLength?: number, timestamp: Timestamp}} data 
+     * @param {{requestId: RequestId, encodedDataLength?: number, timestamp: Timestamp}} data
      * @param {import('puppeteer').CDPSession} cdp
      */
     async handleFinishedRequest(data, cdp) {

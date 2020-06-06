@@ -1,11 +1,13 @@
 const MAX_ASYNC_CALL_STACK_DEPTH = 32;// max depth of async calls tracked
 const allBreakpoints = require('./breakpoints.js');
 const URL = require('url').URL;
-const STACK_SOURCE_REGEX = /\((https?:\/\/.*?):[0-9]+:[0-9]+\)/i;
+// const STACK_SOURCE_REGEX = /\((https?:\/\/.*?):[0-9]+:[0-9]+\)/i;
+// capture URLs without parens due to puppeteer-extra-plugin-stealth overwrites
+const STACK_SOURCE_REGEX = /(https?:\/\/.*?):[0-9]+:[0-9]+/i;
 
 class TrackerTracker {
     /**
-     * @param {function(string, object=): Promise<object>} sendCommand 
+     * @param {function(string, object=): Promise<object>} sendCommand
      */
     constructor(sendCommand) {
         /**
@@ -23,7 +25,7 @@ class TrackerTracker {
     }
 
     /**
-     * @param {{log: function(...any): void}} options 
+     * @param {{log: function(...any): void}} options
      */
     async init({log}) {
         this._log = log;
@@ -36,8 +38,8 @@ class TrackerTracker {
     }
 
     /**
-     * @param {string} command 
-     * @param {object} payload 
+     * @param {string} command
+     * @param {object} payload
      * @returns {Promise<object>}
      */
     sendCommand(command, payload={}) {
@@ -45,18 +47,18 @@ class TrackerTracker {
     }
 
     /**
-     * @param {string} url 
+     * @param {string} url
      */
     setMainURL(url) {
         this._mainURL = url;
     }
 
     /**
-     * @param {string} expression 
-     * @param {string} condition 
-     * @param {string} description 
+     * @param {string} expression
+     * @param {string} condition
+     * @param {string} description
      * @param {boolean} saveArguments
-     * @param {CDPContextId} contextId 
+     * @param {CDPContextId} contextId
      */
     async _addBreakpoint(expression, condition, description, contextId, saveArguments) {
         try {
@@ -119,7 +121,7 @@ class TrackerTracker {
     }
 
     /**
-     * @param {CDPContextId} contextId 
+     * @param {CDPContextId} contextId
      */
     async setupContextTracking(contextId = undefined) {
         const allBreakpointsSet = allBreakpoints
@@ -131,25 +133,25 @@ class TrackerTracker {
                     const description = prop.description || `${obj}.${prop.name}`;
                     await this._addBreakpoint(expression, prop.condition, description, contextId, Boolean(prop.saveArguments));
                 });
-    
+
                 await Promise.all(propPromises);
-    
+
                 const methodPromises = methods.map(async method => {
                     const expression = `Reflect.getOwnPropertyDescriptor(${obj}, '${method.name}').value`;
                     const description = method.description || `${obj}.${method.name}`;
                     await this._addBreakpoint(expression, method.condition, description, contextId, Boolean(method.saveArguments));
                 });
-    
+
                 await Promise.all(methodPromises);
             });
-        
+
         await Promise.all(allBreakpointsSet);
     }
 
     /**
      * Return top non-anonymous source from the stack trace.
-     * 
-     * @param {string} stack JS stack trace 
+     *
+     * @param {string} stack JS stack trace
      * @returns {string}
      */
     _getScriptURL(stack) {
@@ -157,18 +159,21 @@ class TrackerTracker {
 
         for (let line of lines) {
             const lineData = line.match(STACK_SOURCE_REGEX);
-
             if (lineData) {
+                // this._log("MATCH", line, lineData[1])
                 return lineData[1];
             }
+            /*else{
+                if (line.includes("http"))
+                    this._log("NNOOO-MATCH", line)
+            }*/
         }
-
         return null;
     }
 
     /**
      * @param {string} breakpointName
-     * @returns {import('./breakpoints').MethodBreakpoint|import('./breakpoints').PropertyBreakpoint} 
+     * @returns {import('./breakpoints').MethodBreakpoint|import('./breakpoints').PropertyBreakpoint}
      */
     _getBreakpointByName(breakpointName) {
         for (let breakpoint of allBreakpoints) {
@@ -196,7 +201,7 @@ class TrackerTracker {
      */
     processDebuggerPause(params) {
         let payload = null;
-        
+
         try {
             payload = JSON.parse(params.payload);
         } catch(e) {
@@ -209,10 +214,16 @@ class TrackerTracker {
 
         try {
             // calculate absolute URL
-            const urlObj = new URL(script, this._mainURL);
+            let urlObj;
+            if (this._mainURL){
+                urlObj = new URL(script, this._mainURL);
+            } else {
+                urlObj = new URL(script);
+            }
             script = urlObj.href;
+            // this._log('⚠️ GOOD source, assuming global', script, this._mainURL, payload.description, payload.stack);
         } catch(e) {
-            this._log('⚠️ invalid source, assuming global', script, payload.description, payload.stack);
+            this._log('⚠️ **********BAD******** source, assuming global', script, this._mainURL, payload.description, payload.stack);
             script = this._mainURL;
         }
 

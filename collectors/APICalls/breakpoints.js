@@ -56,7 +56,7 @@ const breakpoints = [
     //     ]
     // },
     {
-        global: 'Reflect.getPrototypeOf(document.fonts)',// .prototype .__proto__ and getting method from global object dont' work here 
+        global: 'Reflect.getPrototypeOf(document.fonts)',// .prototype .__proto__ and getting method from global object dont' work here
         props: [
         ],
         methods: [
@@ -187,7 +187,13 @@ const breakpoints = [
             // used to detect fonts
             {
                 name: 'measureText',
-                test: 'var c = document.createElement("canvas"); var ctx = c.getContext("2d"); ctx.measureText("txt");'
+                test: 'var c = document.createElement("canvas"); var ctx = c.getContext("2d"); ctx.measureText("txt");',
+                saveArguments: true
+            },
+            {
+                name: 'fillText',
+                test: 'var c = document.createElement("canvas"); var ctx = c.getContext("2d"); ctx.fillText("txt");',
+                saveArguments: true
             },
             {
                 name: 'getImageData',
@@ -396,7 +402,7 @@ const breakpoints = [
     //     ]
     // },
     {
-        global: 'speechSynthesis.__proto__',// both .prototype and getting method from global object don't work here 
+        global: 'speechSynthesis.__proto__',// both .prototype and getting method from global object don't work here
         props: [],
         methods: [
             {

@@ -33,7 +33,7 @@ program
  */
 async function run(inputUrls, outputPath, verbose, logPath, numberOfCrawlers, dataCollectors, forceOverwrite, filterOutFirstParty, emulateMobile) {
     const logFile = logPath ? fs.createWriteStream(logPath, {flags: 'w'}) : null;
-    
+
     /**
      * @type {function(...any):void}
      */
@@ -94,8 +94,8 @@ async function run(inputUrls, outputPath, verbose, logPath, numberOfCrawlers, da
     };
 
     /**
-     * @param {URL} url 
-     * @param {object} data 
+     * @param {URL} url
+     * @param {object} data
      */
     const dataCallback = (url, data) => {
         successes++;
@@ -106,7 +106,7 @@ async function run(inputUrls, outputPath, verbose, logPath, numberOfCrawlers, da
     };
 
     /**
-     * @param {string} url 
+     * @param {string} url
      */
     const failureCallback = url => {
         failures++;
@@ -181,6 +181,7 @@ if (program.url) {
 const SCREENSHOTS_DIR = "screenshots";
 const SOURCES_DIR = "html";
 const SRI_DIR = "sri";
+const HARS_DIR = "har";
 
 if (! fs.existsSync(SCREENSHOTS_DIR)) {
     fs.mkdirSync(SCREENSHOTS_DIR);
@@ -189,8 +190,13 @@ if (! fs.existsSync(SCREENSHOTS_DIR)) {
 if (! fs.existsSync(SOURCES_DIR)) {
     fs.mkdirSync(SOURCES_DIR);
 }
+
 if (! fs.existsSync(SRI_DIR)) {
     fs.mkdirSync(SRI_DIR);
+}
+
+if (! fs.existsSync(HARS_DIR)) {
+    fs.mkdirSync(HARS_DIR);
 }
 
 if (!urls || !program.output) {
