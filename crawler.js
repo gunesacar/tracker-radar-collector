@@ -4,7 +4,7 @@ const USE_EVASION = true;
 const puppeteer = require('puppeteer-extra');
 // tested on https://intoli.com/blog/not-possible-to-block-chrome-headless/chrome-headless-test.html
 
-if (USE_EVASION){
+if (USE_EVASION) {
     // add stealth plugin and use defaults (all evasion techniques)
     const StealthPlugin = require('puppeteer-extra-plugin-stealth')
     puppeteer.use(StealthPlugin())

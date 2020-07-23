@@ -39,7 +39,8 @@ class RequestCollector extends BaseCollector {
          */
         this._requests = [];
         this._log = log;
-        this._unmatched_extra_info = new Map();
+        this._unmatched_extra_resp_info = new Map();
+        this._unmatched_extra_req_info = new Map();
     }
 
     /**
@@ -53,6 +54,7 @@ class RequestCollector extends BaseCollector {
 
         await Promise.all([
             cdpClient.on('Network.requestWillBeSent', r => this.handleRequest(r, cdpClient)),
+            cdpClient.on('Network.requestWillBeSentExtraInfo', r => this.handleRequestWillBeSentExtraInfo(r)),
             cdpClient.on('Network.webSocketCreated', r => this.handleWebSocket(r)),
             cdpClient.on('Network.responseReceived', r => this.handleResponse(r)),
             cdpClient.on('Network.responseReceivedExtraInfo', r => this.handleResponseExtraInfo(r)),
@@ -113,6 +115,20 @@ class RequestCollector extends BaseCollector {
         const method = request.method;
         let postData;
 
+        this._log("REQ", url, id);
+
+        let headers = this._unmatched_extra_req_info.get(id);
+        /*
+        if (headers){
+            this._log(Object.keys(headers).length, Object.keys(request.headers).length)
+            // this._log(response.url, "extrainfo_headers", typeof(headers), headers)
+            // this._log(response.url, "response.headers", typeof(response.headers), response.headers)
+        }
+        */
+
+        // request.responseHeaders = normalizeHeaders(headers ? headers: response.headers);
+        let requestHeaders = normalizeHeaders(headers ? headers: request.headers);
+
         // for CORS requests initiator is set incorrectly to 'parser', thankfully we can get proper initiator
         // from the corresponding OPTIONS request
         if (method !== 'OPTIONS' && initiator.type === 'parser') {
@@ -131,7 +147,7 @@ class RequestCollector extends BaseCollector {
         /**
          * @type {InternalRequestData}
          */
-        const requestData = {id, url, method, type, initiator, startTime, postData};
+        const requestData = {id, url, method, type, initiator, startTime, postData, requestHeaders};
 
         // if request A gets redirected to B which gets redirected to C chrome will produce 4 events:
         // requestWillBeSent(A) requestWillBeSent(B) requestWillBeSent(C) responseReceived()
@@ -188,10 +204,12 @@ class RequestCollector extends BaseCollector {
         } = data;
         const request = this.findLastRequestWithId(id);
         // this._log('RECEIVED response', id, response.url);
+
         if (!request) {
             this._log('⚠️ unmatched response', id, response.url);
             return;
         }
+        this._log("RESP", request.url, id);
 
         request.type = type || request.type;
         request.status = response.status;
@@ -200,14 +218,14 @@ class RequestCollector extends BaseCollector {
         // might be filtered (e.g. missing set-cookie header)
         if (!request.responseHeaders) {
             // check if we received an handleResponseExtraInfo for this request
-            let headers = this._unmatched_extra_info.get(id);
-            /*
-            if (headers){
-                this._log(Object.keys(headers).length, Object.keys(response.headers).length)
+            let headers = this._unmatched_extra_resp_info.get(id);
+
+            if (headers) {
+                this._log("Extra", Object.keys(headers).length, "response", Object.keys(response.headers).length)
                 // this._log(response.url, "extrainfo_headers", typeof(headers), headers)
                 // this._log(response.url, "response.headers", typeof(response.headers), response.headers)
             }
-            */
+
             request.responseHeaders = normalizeHeaders(headers ? headers: response.headers);
         }
     }
@@ -225,12 +243,35 @@ class RequestCollector extends BaseCollector {
         if (!request) {
             // this._log('⚠️ unmatched extra info', id, headers);
             this._log('⚠️ unmatched extra info', id);
-            this._unmatched_extra_info.set(id, headers)
+            this._unmatched_extra_resp_info.set(id, headers);
             return;
         }
 
         request.responseHeaders = normalizeHeaders(headers);
     }
+
+    /**
+     * Network.requestWillBeSentExtraInfo
+     * @param {{requestId: RequestId, associatedCookies: object, headers: object}} data
+     */
+    handleRequestWillBeSentExtraInfo(data) {
+        const {
+            requestId: id,
+            associatedCookies,
+            headers
+        } = data;
+        const request = this.findLastRequestWithId(id);
+        if (!request) {
+            // this._log('⚠️ unmatched extra REQ info', id, headers);
+            // this._log('⚠️ unmatched extra REQ, info', id, headers);
+            this._unmatched_extra_req_info.set(id, headers)
+            return;
+        }
+        // this._log("associatedCookies", associatedCookies)
+
+        request.requestHeaders = normalizeHeaders(headers);
+    }
+
 
     /**
      * @param {{errorText: string, requestId: RequestId, timestamp: Timestamp, type: ResourceType}} data
@@ -302,6 +343,7 @@ class RequestCollector extends BaseCollector {
                 size: request.size,
                 remoteIPAddress: request.remoteIPAddress,
                 responseHeaders: request.responseHeaders && filterHeaders(request.responseHeaders, this._saveHeaders),
+                requestHeaders: request.requestHeaders,
                 responseBodyHash: request.responseBodyHash,
                 failureReason: request.failureReason,
                 redirectedTo: request.redirectedTo,
@@ -325,6 +367,7 @@ module.exports = RequestCollector;
  * @property {string=} redirectedTo
  * @property {number=} status
  * @property {string} remoteIPAddress
+ * @property {object} requestHeaders
  * @property {object} responseHeaders
  * @property {string=} responseBodyHash
  * @property {string} failureReason
@@ -344,6 +387,7 @@ module.exports = RequestCollector;
  * @property {number=} status
  * @property {string=} remoteIPAddress
  * @property {Object<string,string>=} responseHeaders
+ * @property {Object<string,string>=} requestHeaders
  * @property {string=} failureReason
  * @property {number=} size
  * @property {Timestamp=} startTime
